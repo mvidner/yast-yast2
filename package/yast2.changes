@@ -1,4 +1,10 @@
 -------------------------------------------------------------------
+Mon Oct 11 11:13:54 UTC 2013 - mfilka@suse.com
+
+- changed API for querying network configuration backend
+- 3.1.1
+
+-------------------------------------------------------------------
 Wed Oct  9 13:45:40 UTC 2013 - jreidinger@suse.com
 
 - Install binaries to /usr/sbin instead of /sbin to be consistent 

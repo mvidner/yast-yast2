@@ -1,6 +1,7 @@
-#!/usr/bin/env rspec
+#! /usr/bin/env ruby
 
-ENV["Y2DIR"] = File.expand_path("../../src", __FILE__)
+require "minitest/spec"
+require "minitest/autorun"
 
 require "yast"
 
@@ -10,7 +11,7 @@ module Yast
 
   describe NetworkInterfaces do
 
-    context "Parsing device name" do
+    describe "Parsing device name" do
 
       DEVICE_DESCS = [
         { 
@@ -54,13 +55,13 @@ module Yast
         describe '#alias_num' do
 
           it "returns alias_id: <#{alias_id}> for name: <#{device_name}>" do
-            expect(NetworkInterfaces.alias_num(device_name)).to be_eql alias_id
+            NetworkInterfaces.alias_num(device_name).must_equal alias_id
           end
         end
     
          describe "#device_type" do
           it "returns type by regex: <#{type_by_regex}> for name: <#{device_name}>" do
-            expect(NetworkInterfaces.device_type(device_name)).to be_eql type_by_regex
+            NetworkInterfaces.device_type(device_name).must_equal type_by_regex
           end
          end
       end

@@ -906,12 +906,7 @@ module Yast
       )
       if Ops.get_boolean(attrib, "add_delete_buttons", true)
         # help 2/4, optional
-        help = Ops.add(
-          help,
-          _(
-            "<p>To add a new option, click <b>Add</b>. To remove\nan option, select it and click <b>Delete</b>.</p>"
-          )
-        )
+        help = help + _("<p>To add a new option, click <b>Add</b>. To remove\nan option, select it and click <b>Delete</b>.</p>")
       end
 
       if Ops.get_boolean(attrib, "changed_column", false)

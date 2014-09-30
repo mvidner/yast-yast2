@@ -930,10 +930,7 @@ module Yast
         focus = :focus_no
 
         # Additional hint when trying to abort program in spite of changes
-        message = Ops.add(
-          Ops.add(message, "\n"),
-          _("All changes will be lost!")
-        )
+        message = (message + "\n") + _("All changes will be lost!")
       end
 
       ret = AnyQuestion(

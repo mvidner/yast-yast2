@@ -513,12 +513,7 @@ module Yast
         # %3 is push button label, eg. "Save Changes and Restart Service Now"
         # (without quotes)
         # note: %3 is correct, do not replace with %1!!!
-        help = Ops.add(
-          help,
-          _(
-            "<p>To save all changes and restart the\nservice immediately, use <b>%3</b>.</p>\n"
-          )
-        )
+        help = help + _("<p>To save all changes and restart the\nservice immediately, use <b>%3</b>.</p>\n")
       end
       help
     end

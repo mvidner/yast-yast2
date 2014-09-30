@@ -698,10 +698,7 @@ module Yast
 
       if w
         # translators: warnings summary header
-        richtext = Ops.add(
-          Ops.add(Ops.add(richtext, "<P><B>"), _("Warning:")),
-          "</B><BR>"
-        )
+        richtext = ((richtext + "<P><B>") + _("Warning:")) + "</B><BR>"
 
         Builtins.foreach(@warnings) do |s|
           strs = Builtins.splitstring(s, "\n")

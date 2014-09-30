@@ -1019,12 +1019,7 @@ module Yast
         # help text for firewall port openning widget 2/3, optional
         # %1 is push button label, eg. "Firewall &Details" (without quotes)
         # note: %2 is correct, do not replace with %1!!!
-        help = Ops.add(
-          help,
-          _(
-            "To select interfaces on which to open the port,\nclick <b>%2</b>.<br>"
-          )
-        )
+        help = help + _("To select interfaces on which to open the port,\nclick <b>%2</b>.<br>")
       end
       # help text for firewall settings widget 3/3,
       help = Ops.add(

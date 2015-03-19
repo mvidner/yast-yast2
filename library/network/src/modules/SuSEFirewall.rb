@@ -33,7 +33,18 @@
 require "yast"
 
 module Yast
-  class SuSEFirewallClass < Module
+  # Factory for construction of appropriate firewall object based on
+  # desired backend.
+  class Firewall < Module
+    def self.create
+      SuSEFirewall2.new
+    end
+  end
+
+  # ----------------------------------------------------------------------------
+  # SuSEFirewall2/SF2 Class. The original, simply created from the Firewall
+  # factory class.
+  class SuSEFirewall2 < Module
     CONFIG_FILE = "/etc/sysconfig/SuSEfirewall2"
 
     include Yast::Logger
@@ -3892,6 +3903,8 @@ module Yast
     publish function: :full_init_on_boot, type: "boolean (boolean)"
   end
 
-  SuSEFirewall = SuSEFirewallClass.new
-  SuSEFirewall.main
+  SuSEFirewall = Firewall.create
+  if SuSEFirewall.is_a?(SuSEFirewall2)
+    SuSEFirewall.main
+  end
 end

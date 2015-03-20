@@ -38,6 +38,51 @@ module Yast
   # Factory for construction of appropriate firewall object based on
   # desired backend.
   class Firewall < Module
+
+    # Use same hash for package names and services
+    @@firewall_backends = {
+      :sf2 => "SuSEfirewall2",
+      :fwd => "firewalld"
+    }
+
+    # Check if backend is installed on the system.
+    # @param symbol backend
+    # @return boolean if backend is installed.
+    def self._backend_available?(backend_sym)
+      Yast.import "PackageSystem"
+
+      # SF2 has it's own method of checking if it's installed. This is
+      # used internally by SF2. Here, we simply care if the package
+      # is present on the system.
+      PackageSystem.Installed(@@firewall_backends[backend_sym])
+    end
+
+    # Obtain backends which are installed on the system
+    # @return array of symbols representing installed backends.
+    def self.get_installed_backends
+      backends = []
+
+      @@firewall_backends.each_key { |k| backends << k if self._backend_available?(k) }
+
+      backends
+    end
+
+    # Obtain running backend on the system.
+    # @return array of symbols representing currently running backends.
+    def self.get_running_backends
+
+      Yast.import "Service"
+
+      running_backends = []
+
+      installed_backends = self.get_installed_backends
+      installed_backends.each { |b| running_backends << b if Service.Active(@@firewall_backends[b]) }
+
+      # In theory this should only return an Array with only one element in it
+      # since FirewallD and SF2 systemd service files conflict with each other.
+      running_backends
+    end
+
     def self.create
       SuSEFirewall2.new
     end

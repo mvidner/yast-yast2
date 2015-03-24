@@ -850,6 +850,20 @@ module Yast
       nil
     end
 
+    def _sf2_to_firewalld_zone(zone)
+      sf2_to_firewalld_map = {
+        "INT" => "trusted",
+        "EXT" => "external",
+        "DMA" => "dmz"
+      }
+
+      if sf2_to_firewalld_map.has_key?(zone)
+        sf2_to_firewalld_map[zone]
+      else
+        zone
+      end
+    end
+
     def Read
       # Do not read it again and again
       # to avoid rewriting changes already made

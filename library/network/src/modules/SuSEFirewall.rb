@@ -651,7 +651,7 @@ module Yast
     # Create appropriate firewall instance based on factors such as which backends
     # are available and/or running/selected.
     # @return SuSEFirewall2 or SuSEFirewalld instance.
-    def self.create
+    def self.create(backend_sym = nil)
       Yast.import "Mode"
 
       # Old testsuite
@@ -660,6 +660,13 @@ module Yast
         # will be committed later on but they will only affect the new
         # testsuite
         SuSEFirewall2.new
+
+      # If backend is specificed, go ahead and create an instance. Otherwise, try
+      # to detect which backend is enabled and create the appropriate instance.
+      elsif backend_sym == :sf2
+        SuSEFirewall2.new
+      elsif backend_sym == :fwd
+        SuSEFirewalld.new
       else
         selected_backend = nil
         enabled_backends = self.get_enabled_backends

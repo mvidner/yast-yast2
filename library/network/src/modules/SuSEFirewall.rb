@@ -648,6 +648,13 @@ module Yast
       true
     end
 
+    def morph_to(backend_sym)
+      # Sometimes it's more convenient to send the backend string name.
+      backend_sym = @@firewall_backends.select { |k, v| v == backend_sym }.keys.first unless backend_sym.is_a?(Symbol)
+      Yast.send(:remove_const, 'SuSEFirewall')
+      Yast.const_set('SuSEFirewall', self.class.superclass.create(backend_sym))
+    end
+
     # Create appropriate firewall instance based on factors such as which backends
     # are available and/or running/selected.
     # @return SuSEFirewall2 or SuSEFirewalld instance.

@@ -632,6 +632,21 @@ module Yast
       @needed_packages_installed
     end
 
+    # Function for saving configuration and restarting firewall.
+    # Is is the same as Write() but write is allways forced.
+    #
+    # @return	[Boolean] if successful
+    def SaveAndRestartService
+      Builtins.y2milestone("Forced save and restart")
+      SetModified()
+
+      SetStartService(true)
+
+      return false if !Write()
+
+      true
+    end
+
     # Create appropriate firewall instance based on factors such as which backends
     # are available and/or running/selected.
     # @return SuSEFirewall2 or SuSEFirewalld instance.
@@ -1342,6 +1357,7 @@ module Yast
     publish function: :SetServicesForZones, type: "boolean (list <string>, list <string>, boolean)"
     publish function: :SuSEFirewallIsInstalled, type: "boolean ()"
     publish function: :SetInstallPackagesIfMissing, type: "void (boolean)"
+    publish function: :SaveAndRestartService, type: "boolean ()"
 
   end
 
@@ -3564,21 +3580,6 @@ module Yast
       return false if !WriteConfiguration()
 
       return false if !ActivateConfiguration()
-
-      true
-    end
-
-    # Function for saving configuration and restarting firewall.
-    # Is is the same as Write() but write is allways forced.
-    #
-    # @return	[Boolean] if successful
-    def SaveAndRestartService
-      Builtins.y2milestone("Forced save and restart")
-      SetModified()
-
-      SetStartService(true)
-
-      return false if !Write()
 
       true
     end

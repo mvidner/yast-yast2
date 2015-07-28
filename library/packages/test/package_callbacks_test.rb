@@ -7,6 +7,11 @@ Yast.import "PackageCallbacks"
 describe Yast::PackageCallbacks do
   subject { Yast::PackageCallbacks }
 
+  before do
+    mode = double(commandline: false)
+    stub_const("Yast::Mode", mode)
+  end
+
   describe "#textmode" do
     it "returns true if runned as CLI" do
       mode = double(commandline: true)

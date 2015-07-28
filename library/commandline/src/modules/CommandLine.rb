@@ -1516,6 +1516,8 @@ module Yast
       Builtins.y2milestone("----------------------------------------")
       Builtins.y2milestone("Command line interface started")
 
+      @done = false
+
       # Initialize the arguments
       return !Aborted() if !Init(commandline, WFM.Args)
 

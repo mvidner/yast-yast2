@@ -13,6 +13,15 @@ def reset_SuSEFirewallIsInstalled_cache
 end
 
 describe Yast::SuSEFirewall do
+
+  before :example do
+    # We shouldn't run this test if firewalld is running
+    if Yast::SuSEFirewall.is_a?(Yast::SuSEFirewalld)
+      skip "FirewallD backend is not supported by this test" do
+      end
+    end
+  end
+
   describe "#SuSEFirewallIsInstalled" do
     before(:each) do
       reset_SuSEFirewallIsInstalled_cache

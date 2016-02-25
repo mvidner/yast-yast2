@@ -67,6 +67,23 @@ module Yast
       backends
     end
 
+    # Obtain list of enabled backends.
+    #
+    # @return array of symbols representing enabled backends.
+    def self.get_enabled_backends
+
+      Yast.import "Service"
+
+      enabled_backends = []
+
+      installed_backends = self.get_installed_backends
+      installed_backends.each do |b|
+        enabled_backends << b if Service.Enabled(@@firewall_backends[b])
+      end
+
+      enabled_backends
+    end
+
     # Obtain running backend on the system.
     # @return array of symbols representing currently running backends.
     def self.get_running_backends
@@ -83,8 +100,54 @@ module Yast
       running_backends
     end
 
+    # Create appropriate firewall instance based on factors such as which backends
+    # are available and/or running/selected.
+    # @return SuSEFirewall2 or SuSEFirewalld instance.
     def self.create
-      SuSEFirewall2.new
+      Yast.import "Mode"
+
+      # Old testsuite
+      if Mode.testsuite
+        # For the old testsuite, always generate SF2 instance. FirewallD tests
+        # will be committed later on but they will only affect the new
+        # testsuite
+        SuSEFirewall2.new
+      else
+        selected_backend = nil
+        enabled_backends = self.get_enabled_backends
+        running_backends = self.get_running_backends
+
+        begin
+          # Only one running backend is permitted.
+          raise ArgumentError if running_backends.size > 1
+
+          # If both firewalls are enabled, then make SF2 the default one and
+          # emit a warning
+          if running_backends.size == 0 and enabled_backends.size > 1
+            Builtins.y2warning("Both SuSEfirewall2 and firewalld services are enabled. " \
+                               "Defaulting to SuSEfirewall2")
+            enabled_backends[0] = :sf2
+          end
+
+          # Set a good default. The running one takes precedence over the enabled one.
+          selected_backend = running_backends[0] ? running_backends[0] : enabled_backends[0]
+          selected_backend = :sf2 if selected_backend.to_s.empty? # SF2 still the default
+
+          if selected_backend == :fwd
+            # SuSEFirewalld instance is only generated if firewalld is running.
+            SuSEFirewalld.new
+          else
+            # All other cases, we generate SF2 instance. This is still our default afterall.
+            SuSEFirewall2.new
+          end
+        rescue ArgumentError
+          # This should never happen since FirewallD and SF2 systemd services
+          # conflict with each other
+          Builtins.y2error("Multiple firewall backends are running. One needs to be shutdown to continue.")
+          # Re-raise it
+          raise ArgumentError
+        end
+      end
     end
   end
 

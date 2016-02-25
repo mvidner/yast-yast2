@@ -10,6 +10,14 @@ Yast.import "Linuxrc"
 describe Yast::SuSEFirewallProposal do
   subject { Yast::SuSEFirewallProposal }
 
+  before :example do
+    # We shouldn't run this test if firewalld is running
+    if Yast::SuSEFirewall.is_a?(Yast::SuSEFirewalld)
+      skip "FirewallD backend is not supported by this test" do
+      end
+    end
+  end
+
   describe "#ProposeFunctions" do
     context "when iscsi is used" do
       it "calls the iscsi proposal" do

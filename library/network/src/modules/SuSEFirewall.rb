@@ -274,6 +274,15 @@ module Yast
       end
     end
 
+    # Function returns list of known firewall zones (shortnames)
+    #
+    # @return	[Array<String>] of firewall zones
+    #
+    # @example GetKnownFirewallZones() -> ["DMZ", "EXT", "INT"]
+    def GetKnownFirewallZones
+      deep_copy(@known_firewall_zones)
+    end
+
     # Create appropriate firewall instance based on factors such as which backends
     # are available and/or running/selected.
     # @return SuSEFirewall2 or SuSEFirewalld instance.
@@ -352,9 +361,22 @@ module Yast
       @FIREWALL_PACKAGE = "firewalld"
       # firewall settings map
       @SETTINGS = {}
+      # list of known firewall zones
+      @known_firewall_zones = ["block", "dmz", "drop", "external", "home",
+                               "internal", "public", "trusted", "work"]
+
       # Zone which works with the special_all_interface_string string. In our case,
       # we don't want to deal with this just yet. FIXME
       @special_all_interface_zone = ""
+
+      # Initialize the @SETTINGS hash
+      @@key_settings.each { |x| @SETTINGS[x] = nil }
+      GetKnownFirewallZones().each do |zone|
+        @SETTINGS[zone] = {}
+        @@zone_attributes.each do |atr|
+          @SETTINGS[zone][atr] = []
+        end
+      end
     end
 
     # Function which attempts to convert a sf2_service name to a firewalld
@@ -384,6 +406,7 @@ module Yast
     publish variable: :firewall_service, type: "string", private: true
     publish variable: :FIREWALL_PACKAGE, type: "const string"
     publish variable: :SETTINGS, type: "map <string, any>", private: true
+    publish variable: :known_firewall_zones, type: "list <string>", private: true
     publish variable: :special_all_interface_zone, type: "string"
     publish function: :GetStartService, type: "boolean ()"
     publish function: :SetStartService, type: "void (boolean)"
@@ -395,6 +418,7 @@ module Yast
     publish function: :DisableServices, type: "boolean ()"
     publish function: :IsEnabled, type: "boolean ()"
     publish function: :IsStarted, type: "boolean ()"
+    publish function: :GetKnownFirewallZones, type: "list <string> ()"
 
   end
 
@@ -649,15 +673,6 @@ module Yast
       @modified = false
 
       nil
-    end
-
-    # Function returns list of known firewall zones (shortnames)
-    #
-    # @return	[Array<String>] of firewall zones
-    #
-    # @example GetKnownFirewallZones() -> ["DMZ", "EXT", "INT"]
-    def GetKnownFirewallZones
-      deep_copy(@known_firewall_zones)
     end
 
     # Report the error, warning, message only once.

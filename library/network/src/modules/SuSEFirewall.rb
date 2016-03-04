@@ -346,6 +346,15 @@ module Yast
     # there without having to change all the SF2 callers.
     @@key_settings=["enable_firewall", :logging, "start_firewall"]
 
+    EMPTY_ZONE = {
+        :interfaces => [],
+        :masquerade => [],
+        :modified => [],
+        :ports => [],
+        :protocols => [],
+        :services => []
+    }
+
     # We need that for the tests. Nothing else should access the API
     # directly
     def api
@@ -403,6 +412,64 @@ module Yast
       else
         deep_copy([tmp_service])
       end
+    end
+
+    # Function for getting exported SuSEFirewall configuration
+    #
+    # @return	[Hash{String => Object}] with configuration
+    def Export
+      deep_copy(@SETTINGS)
+    end
+
+    # Function for setting SuSEFirewall configuration from input
+    #
+    # @param	map <string, any> with configuration
+    def Import(import_settings)
+      Read()
+      import_settings = deep_copy(import_settings)
+      # Sanitize it
+      import_settings.keys.each do |k|
+        if !GetKnownFirewallZones().include?(k) and !@@key_settings.include?(k)
+          Builtins.y2warning("Removing invalid key: %1 from imported settings", k)
+          import_settings.delete(k)
+        else
+          import_settings[k].keys.each do |v|
+            if !@@zone_attributes.include?(v)
+              Builtins.y2warning("Removing invalid value: %1 from key %2", v, k)
+              import_settings[k].delete(v)
+            end
+          end if import_settings[k].is_a?(Hash)
+        end
+      end
+
+      # Ruby's merge will probably not work since we have nested hashes
+      @SETTINGS.keys.each do |key|
+        if import_settings.include?(key)
+          if import_settings[key].class == Hash
+            # Merge them
+            @SETTINGS[key].merge!(import_settings[key])
+          else
+            @SETTINGS[key] = import_settings[key]
+          end
+        end
+      end
+
+      # Merge missing attributes
+      @SETTINGS.keys.each do |key|
+        # is this a zone?
+        if GetKnownFirewallZones().include?(key)
+          @SETTINGS[key] = EMPTY_ZONE.merge(@SETTINGS[key])
+          # Everything may have been modified
+          @SETTINGS[key][:modified] = [:interfaces, :masquerade, :ports, :protocols, :services]
+        end
+      end
+
+      # Tests mock the read method so read the NetworkInterface list again
+      NetworkInterfaces.Read if not @configuration_has_been_read
+
+      SetModified()
+
+      nil
     end
 
     def Read
@@ -675,6 +742,8 @@ module Yast
     publish function: :WriteConfiguration, type: "boolean ()"
     publish function: :WriteOnly, type: "boolean ()"
     publish function: :Write, type: "boolean ()"
+    publish function: :Export, type: "map <string, any> ()"
+    publish function: :Import, type: "void (map <string, any>)"
 
   end
 

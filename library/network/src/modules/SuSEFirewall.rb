@@ -1249,9 +1249,75 @@ module Yast
     # @example GetInterfacesInZone ("external") -> ["eth4", "eth5"]
     def GetInterfacesInZone(zone)
       return [] if !GetKnownFirewallZones().include?(zone)
-      deep_copy(@SETTINGS[zone][:interfaces])
+      # Only return the known ones
+
+      interfaces_in_zone = deep_copy(@SETTINGS[zone][:interfaces])
+
+      known_interfaces_now = GetListOfKnownInterfaces()
+
+      # filtering special strings
+      interfaces_in_zone = Builtins.filter(interfaces_in_zone) do |interface|
+        interface != "" && Builtins.contains(known_interfaces_now, interface)
+      end
+
+      deep_copy(interfaces_in_zone)
     end
 
+    # Function removes interface from defined zone.
+    #
+    # @param [String] interface
+    # @param [String] zone
+    # @example RemoveInterfaceFromZone ("modem0", "EXT")
+    def RemoveInterfaceFromZone(interface, zone)
+
+      return nil if !IsKnownZone(zone)
+
+      SetModified()
+
+      Builtins.y2milestone(
+        "Removing interface '%1' from '%2' zone.",
+        interface,
+        zone
+      )
+
+      @SETTINGS[zone][:interfaces].delete(interface)
+      @SETTINGS[zone][:modified] << :interfaces
+
+      nil
+    end
+
+    # Functions adds interface into defined zone.
+    # All appearances of interface in other zones are removed.
+    #
+    # @param [String] interface
+    # @param [String] zone
+    # @example AddInterfaceIntoZone ("eth5", "DMZ")
+    def AddInterfaceIntoZone(interface, zone)
+
+      return nil if !IsKnownZone(zone)
+
+      SetModified()
+
+      current_zone = GetZoneOfInterface(interface)
+
+      # removing all appearances of interface in zones, excepting current_zone==new_zone
+      while !current_zone.nil? && current_zone != zone
+        # interface is in any zone already, removing it at first
+        RemoveInterfaceFromZone(interface, current_zone) if current_zone != zone
+        current_zone = GetZoneOfInterface(interface)
+      end
+
+      Builtins.y2milestone(
+        "Adding interface '%1' into '%2' zone.",
+        interface,
+        zone
+      )
+
+      @SETTINGS[zone][:interfaces] << interface
+      @SETTINGS[zone][:modified] << :interfaces
+
+      nil
+    end
     # Function returns list of known interfaces in requested zone.
     # In the firewalld case, we don't support the special 'any' string.
     # Thus, interfaces not in a zone will not be included.
@@ -1405,7 +1471,16 @@ module Yast
     # @example
     #	GetSpecialInterfacesInZone("EXT") -> ["any", "unknown-1", "wrong-3"]
     def GetSpecialInterfacesInZone(zone)
-      []
+      interfaces_in_zone = deep_copy(@SETTINGS[zone][:interfaces])
+
+      known_interfaces_now = GetInterfacesInZone(zone)
+
+      # filtering known interfaces and spaces
+      interfaces_in_zone = Builtins.filter(interfaces_in_zone) do |interface|
+        interface != "" && !Builtins.contains(known_interfaces_now, interface)
+      end
+
+      deep_copy(interfaces_in_zone)
     end
 
     # Function removes special string from defined zone. For firewalld we
@@ -1414,7 +1489,7 @@ module Yast
     # @param [String] interface
     # @param [String] zone
     def RemoveSpecialInterfaceFromZone(interface, zone)
-     nil
+      RemoveInterfaceFromZone(interface, zone)
     end
 
     # Functions adds special string into defined zone. For firewalld we
@@ -1423,7 +1498,7 @@ module Yast
     # @param [String] interface
     # @param [String] zone
     def AddSpecialInterfaceIntoZone(interface, zone)
-      nil
+      AddInterfaceIntoZone(interface, zone)
     end
 
     publish variable: :firewall_service, type: "string", private: true
@@ -1480,6 +1555,8 @@ module Yast
     publish function: :GetSpecialInterfacesInZone, type: "list <string> (string)"
     publish function: :RemoveSpecialInterfaceFromZone, type: "void (string, string)"
     publish function: :AddSpecialInterfaceIntoZone, type: "void (string, string)"
+    publish function: :RemoveInterfaceFromZone, type: "void (string, string)"
+    publish function: :AddInterfaceIntoZone, type: "void (string, string)"
 
   end
 

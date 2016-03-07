@@ -1526,6 +1526,85 @@ module Yast
       AddInterfaceIntoZone(interface, zone)
     end
 
+    # Function returns actual state of logging.
+    #
+    # @param [String] unused (for SF2 compatibility)
+    # @return	[String] 'off', 'multicast', 'broadcast', etc
+    #
+    # @example
+    #	GetLoggingSettings() -> 'broadcast'
+    def GetLoggingSettings(void_param = nil)
+      @SETTINGS[:logging]
+    end
+
+    # Function sets state of logging.
+    #
+    # @param [String] unused (for SF2 compatibility)
+    # @param	string new logging state 'off', 'multicast', 'broadcast'
+    #
+    # @example
+    #	SetLoggingSettings ("off")
+    def SetLoggingSettings(rule = nil, state)
+
+      return nil if @SETTINGS[:logging] == state
+
+      good_states = ["all", "broadcast", "multicast", "off", "unicast"]
+
+      if !good_states.any? { |x| x == state.downcase } or state.nil?
+        state = "off"
+      end
+
+      SetModified()
+
+      @SETTINGS[:logging] = state.downcase
+
+      nil
+    end
+
+    # Function returns yes/no - ingoring broadcast for zone
+    #
+    # @param [String] unused
+    # @return	[String] "yes" or "no"
+    #
+    # @example
+    #	// Does not logg ignored broadcast packets
+    #	GetIgnoreLoggingBroadcast () -> "yes"
+    def GetIgnoreLoggingBroadcast(zone = nil)
+      if self.is_a?(SuSEFirewall2) and !IsKnownZone(zone)
+        Builtins.y2error("Unknown zone '%1'", zone)
+        return nil
+      end
+
+      return "yes" if @SETTINGS[:logging] == "broadcast"
+
+      return "no"
+    end
+
+    # Function sets yes/no - ingoring broadcast for zone
+    #
+    # @param [String] unused
+    # @param	string ignore 'yes' or 'no'
+    #
+    # @example
+    #	// Do not log broadcast packetes from DMZ
+    #	SetIgnoreLoggingBroadcast ("DMZ", "yes")
+    def SetIgnoreLoggingBroadcast(zone = nil, bcast)
+      if self.is_a?(SuSEFirewall2) and !IsKnownZone(zone)
+        Builtins.y2error("Unknown zone '%1'", zone)
+        return nil
+      end
+
+      bcast = bcast.downcase == "yes" ? "broadcast" : @SETTINGS[:logging]
+
+      return nil if @SETTINGS[:logging] == bcast
+
+      SetModified()
+
+      @SETTINGS[:logging] = bcast.downcase
+
+      nil
+    end
+
     publish variable: :firewall_service, type: "string", private: true
     publish variable: :FIREWALL_PACKAGE, type: "const string"
     publish variable: :SETTINGS, type: "map <string, any>", private: true
@@ -1586,6 +1665,10 @@ module Yast
     publish function: :IncreaseVerbosity, type: "void ()", private: true
     publish function: :DecreaseVerbosity, type: "void ()", private: true
     publish function: :IsVerbose, type: "boolean ()", private: true
+    publish function: :GetLoggingSettings, type: "string (string)"
+    publish function: :SetLoggingSettings, type: "void (string, string)"
+    publish function: :GetIgnoreLoggingBroadcast, type: "string (string)"
+    publish function: :SetIgnoreLoggingBroadcast, type: "void (string, string)"
 
   end
 

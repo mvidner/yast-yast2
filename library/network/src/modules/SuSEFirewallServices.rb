@@ -773,6 +773,8 @@ module Yast
 
   class SuSEFirewalldServicesClass < SuSEFirewallServicesClass
 
+    include Yast::Logger
+
     SERVICES_DIR = ["/etc/firewalld/services", "/usr/lib/firewalld/services"]
 
     IGNORED_SERVICES = ["..", "."]
@@ -792,6 +794,108 @@ module Yast
       @known_metadata = { "Name" => "name", "Description" => "description" }
 
     end
+
+    # Reads definition of services that can be used in FirewallD
+    #
+    # @return [Boolean] if successful
+    def ReadServicesDefinedByRPMPackages
+      log.info "Reading FirewallD services from"
+
+      service_attrs = ["modules" , "ports", "protocols"]
+
+      @services ||= {}
+
+      # We need to start the backend first
+      unless SuSEFirewall.IsStarted()
+        SuSEFirewall.StartServices()
+      end
+
+      SuSEFirewall.api.get_supported_services().each do |service_name|
+        # Init everything
+        @services[service_name] = {}
+        @known_services_features.merge!(@known_metadata).each do |k, v|
+          @services[service_name][v] = []
+        end
+
+        service_info = SuSEFirewall.api.get_service_info(service_name)
+        # Extract only valid information
+        service_info.keep_if do |x|
+          x.match(/:\s+\w+/) && @known_services_info.any? { |z| x.include?(z + ": ") }
+        end
+        # And now convert it to a hash
+        service_info = service_info.map { |x| x.lstrip.split(":") }.to_h
+        service_attrs.each do |attr|
+          if service_info.has_key?(attr)
+            case attr
+            when "modules"
+              service_info["modules"].split(" ").each { |x| @services[service_name]["modules"] << x }
+            when "protocols"
+              service_info["protocols"].split(" ").each { |x| @services[service_name]["ip_protocols"] << x }
+            when "ports"
+              all_ports = service_info["ports"].split(" ")
+              all_ports.each do |ports|
+                port_proto = ports.split("/")
+                @services[service_name]["tcp_ports"] << port_proto[0] if port_proto[1] == "tcp"
+                @services[service_name]["udp_ports"] << port_proto[0] if port_proto[1] == "udp"
+              end
+            end
+          end
+        end
+
+        # Fallback for presented service
+        # FIXME: Needs fixes upstream
+        @services[service_name]["name"] = "UNKNOWN NAME"
+        @services[service_name]["description"] = "UNKNOWN DESCRIPTION"
+
+        log.debug("Added service '#{service_name}' with info: #{@services[service_name]}")
+      end
+
+      log.info "Services found: #{@services.keys.sort}"
+
+      true
+    end
+
+    # Returns all known services loaded from disk on-the-fly
+    def all_services
+      ReadServicesDefinedByRPMPackages() if @services.nil?
+      @services
+    end
+
+    # Function returns the map of supported (known) services.
+    #
+    # @return [Hash{String => String}] supported services
+    #
+    #
+    # **Structure:**
+    #
+    #
+    #     	$[ service_id : localized_service_name ]
+    #     	$[
+    #     	  "dns-server" : "DNS Server",
+    #         "vnc" : "Remote Administration",
+    #       ]
+    def GetSupportedServices
+      supported_services = {}
+
+      all_services.each do |service_id, service_definition|
+        Ops.set(
+          supported_services,
+          service_id,
+          # TRANSLATORS: Name of unknown service. %1 is a requested service id like nis-server
+          Ops.get_string(
+            service_definition,
+            "name",
+            Builtins.sformat(_("Unknown service '%1'"), service_id)
+          )
+        )
+      end
+
+      deep_copy(supported_services)
+    end
+
+    publish function: :ReadServicesDefinedByRPMPackages, type: "boolean ()"
+    publish function: :GetSupportedServices, type: "map <string, string> ()"
+
   end
 
   SuSEFirewallServices = SuSEFirewallServicesClass.create

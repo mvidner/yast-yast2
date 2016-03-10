@@ -44,6 +44,16 @@ module Yast
 
     Yast.import "SuSEFirewall"
 
+    DEFAULT_SERVICE = {
+      "tcp_ports"       => [],
+      "udp_ports"       => [],
+      "rpc_ports"       => [],
+      "ip_protocols"    => [],
+      "broadcast_ports" => [],
+      "name"            => "",
+      "description"     => ""
+    }
+
     def self.create(backend_sym = nil)
       # If backend is specificed, go ahead and create an instance. Otherwise, try
       # to detect which backend is enabled and create the appropriate instance.
@@ -64,6 +74,74 @@ module Yast
         end
       end
     end
+
+    # Returns list of service-ids defined by packages.
+    #
+    # @return [Array<String>] service ids
+    def GetListOfServicesAddedByPackage
+      all_services.keys
+    end
+
+    # Function returns needed TCP ports for service
+    #
+    # @param [String] service
+    # @return	[Array<String>] of needed TCP ports
+    def GetNeededTCPPorts(service)
+      service_details(service)["tcp_ports"] || []
+    end
+
+    # Function returns needed UDP ports for service
+    #
+    # @param [String] service
+    # @return	[Array<String>] of needed UDP ports
+    def GetNeededUDPPorts(service)
+      service_details(service)["udp_ports"] || []
+    end
+
+    # Function returns needed IP protocols for service
+    #
+    # @param [String] service
+    # @return	[Array<String>] of needed IP protocols
+    def GetNeededIPProtocols(service)
+      service_details(service)["ip_protocols"] || []
+    end
+
+    # Function returns description of a firewall service
+    #
+    # @param [String] service
+    # @return	[String] service description
+    def GetDescription(service)
+      service_details(service)["description"] || []
+    end
+
+    # Function returns if the service_id is a known (defined) service
+    #
+    # @param [String] service_id
+    # @return	[Boolean] if is known (defined)
+    def IsKnownService(service_id)
+      !service_details(service_id, true).nil?
+    end
+
+    # Function returns needed ports and protocols for service.
+    # Service needs to be known (installed in the system).
+    # Function throws an exception SuSEFirewalServiceNotFound
+    # if service is not known (undefined).
+    #
+    # @param [String] service
+    # @return	[Hash{String => Array<String>}] of needed ports and protocols
+    #
+    # @example
+    #	GetNeededPortsAndProtocols ("service:aaa") -> $[
+    #		"tcp_ports"       : [ "122", "ftp-data" ],
+    #		"udp_ports"       : [ "427" ],
+    #		"rpc_ports"       : [ "portmap", "ypbind" ],
+    #		"ip_protocols"    : [],
+    #		"broadcast_ports" : [ "427" ],
+    #	];
+    def GetNeededPortsAndProtocols(service)
+      DEFAULT_SERVICE.merge(service_details(service))
+    end
+
   end
 
   class SuSEFirewall2ServicesClass < SuSEFirewallServicesClass
@@ -76,16 +154,6 @@ module Yast
 
     # please, check it with configuration in refresh-srv-def-by-pkgs-trans.sh script
     SERVICES_TEXTDOMAIN = "firewall-services"
-
-    DEFAULT_SERVICE = {
-      "tcp_ports"       => [],
-      "udp_ports"       => [],
-      "rpc_ports"       => [],
-      "ip_protocols"    => [],
-      "broadcast_ports" => [],
-      "name"            => "",
-      "description"     => ""
-    }
 
     READ_ONLY_SERVICE_FEATURES = ["name", "description"]
 
@@ -494,14 +562,6 @@ module Yast
       true
     end
 
-    # Function returns if the service_id is a known (defined) service
-    #
-    # @param [String] service_id
-    # @return	[Boolean] if is known (defined)
-    def IsKnownService(service_id)
-      !service_details(service_id, true).nil?
-    end
-
     # Function returns the map of supported (known) services.
     #
     # @return [Hash{String => String}] supported services
@@ -534,51 +594,12 @@ module Yast
       deep_copy(supported_services)
     end
 
-    # Returns list of service-ids defined by packages.
-    #
-    # @return [Array<String>] service ids
-    def GetListOfServicesAddedByPackage
-      all_services.keys
-    end
-
-    # Function returns needed TCP ports for service
-    #
-    # @param [String] service
-    # @return	[Array<String>] of needed TCP ports
-    def GetNeededTCPPorts(service)
-      service_details(service)["tcp_ports"] || []
-    end
-
-    # Function returns needed UDP ports for service
-    #
-    # @param [String] service
-    # @return	[Array<String>] of needed UDP ports
-    def GetNeededUDPPorts(service)
-      service_details(service)["udp_ports"] || []
-    end
-
     # Function returns needed RPC ports for service
     #
     # @param [String] service
     # @return	[Array<String>] of needed RPC ports
     def GetNeededRPCPorts(service)
       service_details(service)["rpc_ports"] || []
-    end
-
-    # Function returns needed IP protocols for service
-    #
-    # @param [String] service
-    # @return	[Array<String>] of needed IP protocols
-    def GetNeededIPProtocols(service)
-      service_details(service)["ip_protocols"] || []
-    end
-
-    # Function returns description of a firewall service
-    #
-    # @param [String] service
-    # @return	[String] service description
-    def GetDescription(service)
-      service_details(service)["description"] || []
     end
 
     # Sets that configuration was modified
@@ -608,26 +629,6 @@ module Yast
     # @return	[Array<String>] of needed broadcast ports
     def GetNeededBroadcastPorts(service)
       service_details(service)["broadcast_ports"] || []
-    end
-
-    # Function returns needed ports and protocols for service.
-    # Service needs to be known (installed in the system).
-    # Function throws an exception SuSEFirewalServiceNotFound
-    # if service is not known (undefined).
-    #
-    # @param [String] service
-    # @return	[Hash{String => Array<String>}] of needed ports and protocols
-    #
-    # @example
-    #	GetNeededPortsAndProtocols ("service:aaa") -> $[
-    #		"tcp_ports"       : [ "122", "ftp-data" ],
-    #		"udp_ports"       : [ "427" ],
-    #		"rpc_ports"       : [ "portmap", "ypbind" ],
-    #		"ip_protocols"    : [],
-    #		"broadcast_ports" : [ "427" ],
-    #	];
-    def GetNeededPortsAndProtocols(service)
-      DEFAULT_SERVICE.merge(service_details(service))
     end
 
     # Immediately writes the configuration of service defined by package to the
@@ -855,6 +856,41 @@ module Yast
       true
     end
 
+    # Function returns needed RPC ports for service
+    #
+    # @param [String] service
+    # @return	[Array<String>] of needed RPC ports
+    def GetNeededRPCPorts(service)
+      []
+    end
+
+    # Returns service definition.
+    # See @services for the format.
+    # If `silent` is not defined or set to `true`, function throws an exception
+    # SuSEFirewalServiceNotFound if service is not found on disk.
+    #
+    # @param [String] service name
+    # @param [String] (optional) whether to silently return nil
+    #                 when service is not found (default false)
+    def service_details(service_name, silent = false)
+      # Drop service: if needed
+      service_name = service_name.include?("service:") ?
+      service_name.partition(":")[2] : service_name
+
+      service = all_services[service_name]
+      if service.nil? && !silent
+        log.error "Uknown service '#{service_name}'"
+        log.info "Known services: #{all_services.keys}"
+
+        raise(
+          SuSEFirewalServiceNotFound,
+          _("Service with name '%{service_name}' does not exist") % { service_name: service_name }
+        )
+      end
+
+      service
+    end
+
     # Returns all known services loaded from disk on-the-fly
     def all_services
       ReadServicesDefinedByRPMPackages() if @services.nil?
@@ -895,6 +931,14 @@ module Yast
 
     publish function: :ReadServicesDefinedByRPMPackages, type: "boolean ()"
     publish function: :GetSupportedServices, type: "map <string, string> ()"
+    publish function: :GetListOfServicesAddedByPackage, type: "list <string> ()"
+    publish function: :GetNeededTCPPorts, type: "list <string> (string)"
+    publish function: :GetNeededUDPPorts, type: "list <string> (string)"
+    publish function: :GetNeededRPCPorts, type: "list <string> (string)"
+    publish function: :GetNeededIPProtocols, type: "list <string> (string)"
+    publish function: :GetDescription, type: "string (string)"
+    publish function: :IsKnownService, type: "boolean (string)"
+    publish function: :GetNeededPortsAndProtocols, type: "map <string, list <string>> (string)"
 
   end
 

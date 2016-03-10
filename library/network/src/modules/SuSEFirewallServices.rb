@@ -41,8 +41,28 @@ module Yast
   end
 
   class SuSEFirewallServicesClass < Module
-    def self.create
-      SuSEFirewall2ServicesClass.new
+
+    Yast.import "SuSEFirewall"
+
+    def self.create(backend_sym = nil)
+      # If backend is specificed, go ahead and create an instance. Otherwise, try
+      # to detect which backend is enabled and create the appropriate instance.
+      if backend_sym == :sf2
+        SuSEFirewall2ServicesClass.new
+      elsif backend_sym == :fwd
+        # We need FirewallD to run as well
+        if !SuSEFirewall.is_a?(SuSEFirewalld)
+          SuSEFirewall.morph_to(:fwd)
+        end
+        SuSEFirewalldServicesClass.new
+      else
+        # Instantiate one based on the running backend
+        if SuSEFirewall.is_a?(SuSEFirewall2)
+          SuSEFirewall2ServicesClass.new
+        else
+          SuSEFirewalldServicesClass.new
+        end
+      end
     end
   end
 

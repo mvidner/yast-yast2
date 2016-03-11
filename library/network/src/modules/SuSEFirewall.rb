@@ -41,6 +41,7 @@ module Yast
     attr_reader :firewall_service
 
     Yast.import "NetworkInterfaces"
+    Yast.import "PortRanges"
 
     include Yast::Logger
 
@@ -685,6 +686,227 @@ module Yast
     # @return	[Boolean] if protocol is supported
     def IsSupportedProtocol(protocol)
       Builtins.contains(@supported_protocols, protocol)
+    end
+
+    # Function sets additional ports/services from taken list. Firstly, all additional services
+    # are removed also with their aliases. Secondly new ports/protocols are added.
+    # It uses GetAdditionalServices() function to get the current state and
+    # then it removes what has been removed and adds what has been added.
+    #
+    # @param [String] protocol
+    # @param [String] zone
+    # @param	list <string> list of ports/protocols
+    # @see #GetAdditionalServices()
+    #
+    # @example
+    #	SetAdditionalServices ("TCP", "EXT", ["53", "128"])
+    def SetAdditionalServices(protocol, zone, new_list_services)
+      new_list_services = deep_copy(new_list_services)
+      old_list_services = Builtins.toset(GetAdditionalServices(protocol, zone))
+      new_list_services = Builtins.toset(new_list_services)
+
+      if new_list_services != old_list_services
+        SetModified()
+
+        add_services = []
+        remove_services = []
+
+        # Add these services
+        Builtins.foreach(new_list_services) do |service|
+          if !Builtins.contains(old_list_services, service)
+            add_services = Builtins.add(add_services, service)
+          end
+        end
+        # Remove these services
+        Builtins.foreach(old_list_services) do |service|
+          if !Builtins.contains(new_list_services, service)
+            remove_services = Builtins.add(remove_services, service)
+          end
+        end
+
+        if Ops.greater_than(Builtins.size(remove_services), 0)
+          Builtins.y2milestone(
+            "Removing additional services %1/%2 from zone %3",
+            remove_services,
+            protocol,
+            zone
+          )
+          RemoveAllowedPortsOrServices(remove_services, protocol, zone, true)
+        end
+        if Ops.greater_than(Builtins.size(add_services), 0)
+          Builtins.y2milestone(
+            "Adding additional services %1/%2 into zone %3",
+            add_services,
+            protocol,
+            zone
+          )
+          AddAllowedPortsOrServices(add_services, protocol, zone)
+        end
+      end
+
+      nil
+    end
+
+    # Local function removes ports and their aliases (if check_for_aliases is true), for
+    # requested protocol and zone.
+    #
+    # @param	list <string> ports to be removed
+    # @param [String] protocol
+    # @param [String] zone
+    # @param	boolean check for port-aliases
+    def RemoveAllowedPortsOrServices(remove_ports, protocol, zone, check_for_aliases)
+      remove_ports = deep_copy(remove_ports)
+      if Ops.less_than(Builtins.size(remove_ports), 1)
+        Builtins.y2warning(
+          "Undefined list of %1 services/ports for service",
+          protocol
+        )
+        return
+      end
+
+      SetModified()
+
+      # FirewallD is easy
+      if self.is_a?(SuSEFirewalld)
+        allowed_services = GetAllowedServicesForZoneProto(zone, protocol)
+        Builtins.y2debug("RemoveAdditionalServices: currently allowed services for %1_%2 -> %3",
+          zone, protocol, allowed_services)
+        # and this is what we keep
+        allowed_services -= remove_ports
+        Builtins.y2debug("RemoveAdditionalServices: new allowed services for %1_%2 -> %3",
+          zone, protocol, allowed_services)
+        SetAllowedServicesForZoneProto(allowed_services, zone, protocol)
+        return nil
+      end
+
+      # all allowed ports
+      allowed_services = PortRanges.DividePortsAndPortRanges(
+        GetAllowedServicesForZoneProto(zone, protocol),
+        false
+      )
+
+      # removing all aliases of ports too, adding aliases into
+      if check_for_aliases
+        remove_ports_with_aliases = []
+        Builtins.foreach(remove_ports) do |remove_port|
+          # skip port ranges, they cannot have any port-alias
+          if PortRanges.IsPortRange(remove_port)
+            remove_ports_with_aliases = Builtins.add(
+              remove_ports_with_aliases,
+              remove_port
+            )
+            next
+          end
+          remove_these_ports = PortAliases.GetListOfServiceAliases(remove_port)
+          remove_these_ports = [remove_port] if remove_these_ports.nil?
+          remove_ports_with_aliases = Convert.convert(
+            Builtins.union(remove_ports_with_aliases, remove_these_ports),
+            from: "list",
+            to:   "list <string>"
+          )
+        end
+        remove_ports = deep_copy(remove_ports_with_aliases)
+      end
+      remove_ports = Builtins.toset(remove_ports)
+
+      # Remove ports only once (because of port aliases), any => integers and strings
+      already_removed = []
+
+      Builtins.foreach(remove_ports) do |remove_port|
+        # Removing from normal ports
+        Ops.set(
+          allowed_services,
+          "ports",
+          Builtins.filter(Ops.get(allowed_services, "ports", [])) do |allowed_port|
+            allowed_port != "" && allowed_port != remove_port
+          end
+        )
+        # Removing also from port ranges
+        if Ops.get(allowed_services, "port_ranges", []) != []
+          # Removing a real port from port ranges
+          if !PortRanges.IsPortRange(remove_port)
+            remove_port_nr = PortAliases.GetPortNumber(remove_port)
+            # Because of all port aliases
+            if !Builtins.contains(already_removed, remove_port_nr)
+              already_removed = Builtins.add(already_removed, remove_port_nr)
+              Ops.set(
+                allowed_services,
+                "port_ranges",
+                PortRanges.RemovePortFromPortRanges(
+                  remove_port_nr,
+                  Ops.get(allowed_services, "port_ranges", [])
+                )
+              )
+            end
+            # Removing a port range from port ranges
+          else
+            if !Builtins.contains(already_removed, remove_port)
+              # Just filtering the exact port range
+              Ops.set(
+                allowed_services,
+                "port_ranges",
+                Builtins.filter(Ops.get(allowed_services, "port_ranges", [])) do |one_port_range|
+                  one_port_range != remove_port
+                end
+              )
+              already_removed = Builtins.add(already_removed, remove_port)
+            end
+          end
+        end
+      end
+
+      allowed_services_all = Convert.convert(
+        Builtins.union(
+          Ops.get(allowed_services, "ports", []),
+          Ops.get(allowed_services, "port_ranges", [])
+        ),
+        from: "list",
+        to:   "list <string>"
+      )
+
+      allowed_services_all = PortRanges.FlattenServices(
+        allowed_services_all,
+        protocol
+      )
+
+      SetAllowedServicesForZoneProto(allowed_services_all, zone, protocol)
+
+      nil
+    end
+
+    # Local function allows ports for requested protocol and zone.
+    #
+    # @param	list <string> ports to be added
+    # @param [String] protocol
+    # @param [String] zone
+    def AddAllowedPortsOrServices(add_ports, protocol, zone)
+      add_ports = deep_copy(add_ports)
+      if Ops.less_than(Builtins.size(add_ports), 1)
+        Builtins.y2warning(
+          "Undefined list of %1 services/ports for service",
+          protocol
+        )
+        return
+      end
+
+      SetModified()
+
+      # all allowed ports
+      allowed_services = GetAllowedServicesForZoneProto(zone, protocol)
+
+      allowed_services = Convert.convert(
+        Builtins.union(allowed_services, add_ports),
+        from: "list",
+        to:   "list <string>"
+      )
+      # Do not do that for FirewallD
+      if self.is_a?(SuSEFirewall2)
+        allowed_services = PortRanges.FlattenServices(allowed_services, protocol)
+      end
+
+      SetAllowedServicesForZoneProto(allowed_services, zone, protocol)
+
+      nil
     end
 
     # Create appropriate firewall instance based on factors such as which backends
@@ -1682,6 +1904,112 @@ module Yast
       deep_copy(all_allowed_services)
     end
 
+    # Function sets list of services as allowed ports for zone and protocol
+    #
+    # @param	list <string> of allowed ports/services
+    # @param [String] zone
+    # @param [String] protocol
+    def SetAllowedServicesForZoneProto(allowed_services, zone, protocol)
+      allowed_services = deep_copy(allowed_services)
+
+      SetModified()
+      ports = []
+      services = []
+
+      protocol.downcase!
+
+      # Allowed_services can either be a service or a port.
+      # we can't use regexps since services and ports can use
+      # the same names so our only chance here is to do some basic
+      # checking.
+      allowed_services.each do |s|
+        Builtins.y2debug("SetAllowedServicesForZoneProto: examining %1", s)
+        if SuSEFirewallServices.GetSupportedServices().keys.include?(s)
+          if protocol == "tcp"
+            if !SuSEFirewallServices.GetNeededTCPPorts(s).empty?
+              Builtins.y2debug("SetAllowedServicesForZoneProto: Adding service %1", s)
+              services << s
+            end
+          elsif protocol == "udp"
+            if !SuSEFirewallServices.GetNeededUDPPorts(s).empty?
+              Builtins.y2debug("SetAllowedServicesForZoneProto: Adding service %1", s)
+              services << s
+            end
+          end
+        # That hopefully matches single ports and ranges
+        elsif s.match(/\d+((:|-)\d+)?/)
+          Builtins.y2debug("Adding port %1 for %2_%3",
+            s, zone, protocol)
+          ports << s
+        else
+          Builtins.y2error("Ignoring unknown service: %1", s)
+          next
+        end
+      end
+
+      protocol.downcase!
+
+      # First we clean the ports no matter what. If new ports
+      # were added we will deal with that below otherwise dropping
+      # all ports is probably what we want.
+      @SETTINGS[zone][:ports].each do |p|
+        port_proto = p.split("/")
+        @SETTINGS[zone][:ports].delete(p) if port_proto[1] == protocol
+      end
+      @SETTINGS[zone][:modified] << :ports
+
+      # Do we have new ports?
+      if !ports.empty?
+        ports.each do |p|
+          # Convert SF2 port range to FirewallD
+          p.sub!(":", "-")
+          port_proto = "#{p}/#{protocol}"
+          if !@SETTINGS[zone][:ports].include?(port_proto)
+            # Remove old services and set the new ones.
+            Builtins.y2debug("SetAllowedServicesForZoneProto: Port %1 will be added",
+              port_proto)
+            @SETTINGS[zone][:ports] << port_proto
+            @SETTINGS[zone][:modified] << :ports
+          end
+        end
+      end
+
+      # Similar to the previous case, we drop all services.
+      # This does not play well with FirewallD. Services may have TCP and UDP
+      # ports and we can't simply remove part of them. So what we do here is
+      # to remove the services which have a no other protocol dependecies
+      # protocol.
+      # FIXME: take IP and other protocols into consideration
+      @SETTINGS[zone][:services].each do |s|
+        Builtins.y2debug("Examinining service %2_%1 for removal",
+          protocol, s)
+        if protocol == "udp" &&
+          SuSEFirewallServices.GetNeededTCPPorts(s).empty? &&
+          !SuSEFirewallServices.GetNeededUDPPorts(s).empty?
+          Builtins.y2debug("Removing service %1", s)
+          @SETTINGS[zone][:services].delete(s)
+        elsif protocol == "tcp" && \
+          SuSEFirewallServices.GetNeededUDPPorts(s).empty? &&
+          !SuSEFirewallServices.GetNeededTCPPorts(s).empty?
+          @SETTINGS[zone][:services].delete(s)
+          Builtins.y2debug("Removing service %1", s)
+        else
+          Builtins.y2debug("Not removing %1 because it has protocol dependencies",
+            s)
+        end
+      end
+      if !services.empty?
+        # Add the new services! We do not assign since that will override
+        # services depending on other protocols!ugh!
+        @SETTINGS[zone][:services] += services
+        @SETTINGS[zone][:services].uniq!
+        @SETTINGS[zone][:modified] << :services
+      end
+
+      nil
+
+    end
+
     publish variable: :firewall_service, type: "string", private: true
     publish variable: :FIREWALL_PACKAGE, type: "const string"
     publish variable: :SETTINGS, type: "map <string, any>", private: true
@@ -1750,6 +2078,9 @@ module Yast
     publish function: :IsSupportedProtocol, type: "boolean (string)", private: true
     publish function: :GetAdditionalServices, type: "list <string> (string, string)"
     publish function: :GetAllowedServicesForZoneProto, type: "list <string> (string, string)", private: true
+    publish function: :SetAdditionalServices, type: "void (string, string, list <string>)"
+    publish function: :RemoveAllowedPortsOrServices, type: "void (list <string>, string, string, boolean)", private: true
+    publish function: :AddAllowedPortsOrServices, type: "void (list <string>, string, string)", private: true
 
   end
 
@@ -2410,151 +2741,6 @@ module Yast
       )
 
       true
-    end
-
-    # Local function removes ports and their aliases (if check_for_aliases is true), for
-    # requested protocol and zone.
-    #
-    # @param	list <string> ports to be removed
-    # @param [String] protocol
-    # @param [String] zone
-    # @param	boolean check for port-aliases
-    def RemoveAllowedPortsOrServices(remove_ports, protocol, zone, check_for_aliases)
-      remove_ports = deep_copy(remove_ports)
-      if Ops.less_than(Builtins.size(remove_ports), 1)
-        Builtins.y2warning(
-          "Undefined list of %1 services/ports for service",
-          protocol
-        )
-        return
-      end
-
-      SetModified()
-
-      # all allowed ports
-      allowed_services = PortRanges.DividePortsAndPortRanges(
-        GetAllowedServicesForZoneProto(zone, protocol),
-        false
-      )
-
-      # removing all aliases of ports too, adding aliases into
-      if check_for_aliases
-        remove_ports_with_aliases = []
-        Builtins.foreach(remove_ports) do |remove_port|
-          # skip port ranges, they cannot have any port-alias
-          if PortRanges.IsPortRange(remove_port)
-            remove_ports_with_aliases = Builtins.add(
-              remove_ports_with_aliases,
-              remove_port
-            )
-            next
-          end
-          remove_these_ports = PortAliases.GetListOfServiceAliases(remove_port)
-          remove_these_ports = [remove_port] if remove_these_ports.nil?
-          remove_ports_with_aliases = Convert.convert(
-            Builtins.union(remove_ports_with_aliases, remove_these_ports),
-            from: "list",
-            to:   "list <string>"
-          )
-        end
-        remove_ports = deep_copy(remove_ports_with_aliases)
-      end
-      remove_ports = Builtins.toset(remove_ports)
-
-      # Remove ports only once (because of port aliases), any => integers and strings
-      already_removed = []
-
-      Builtins.foreach(remove_ports) do |remove_port|
-        # Removing from normal ports
-        Ops.set(
-          allowed_services,
-          "ports",
-          Builtins.filter(Ops.get(allowed_services, "ports", [])) do |allowed_port|
-            allowed_port != "" && allowed_port != remove_port
-          end
-        )
-        # Removing also from port ranges
-        if Ops.get(allowed_services, "port_ranges", []) != []
-          # Removing a real port from port ranges
-          if !PortRanges.IsPortRange(remove_port)
-            remove_port_nr = PortAliases.GetPortNumber(remove_port)
-            # Because of all port aliases
-            if !Builtins.contains(already_removed, remove_port_nr)
-              already_removed = Builtins.add(already_removed, remove_port_nr)
-              Ops.set(
-                allowed_services,
-                "port_ranges",
-                PortRanges.RemovePortFromPortRanges(
-                  remove_port_nr,
-                  Ops.get(allowed_services, "port_ranges", [])
-                )
-              )
-            end
-            # Removing a port range from port ranges
-          else
-            if !Builtins.contains(already_removed, remove_port)
-              # Just filtering the exact port range
-              Ops.set(
-                allowed_services,
-                "port_ranges",
-                Builtins.filter(Ops.get(allowed_services, "port_ranges", [])) do |one_port_range|
-                  one_port_range != remove_port
-                end
-              )
-              already_removed = Builtins.add(already_removed, remove_port)
-            end
-          end
-        end
-      end
-
-      allowed_services_all = Convert.convert(
-        Builtins.union(
-          Ops.get(allowed_services, "ports", []),
-          Ops.get(allowed_services, "port_ranges", [])
-        ),
-        from: "list",
-        to:   "list <string>"
-      )
-      allowed_services_all = PortRanges.FlattenServices(
-        allowed_services_all,
-        protocol
-      )
-
-      SetAllowedServicesForZoneProto(allowed_services_all, zone, protocol)
-
-      nil
-    end
-
-    # Local function allows ports for requested protocol and zone.
-    #
-    # @param	list <string> ports to be added
-    # @param [String] protocol
-    # @param [String] zone
-    def AddAllowedPortsOrServices(add_ports, protocol, zone)
-      add_ports = deep_copy(add_ports)
-      if Ops.less_than(Builtins.size(add_ports), 1)
-        Builtins.y2warning(
-          "Undefined list of %1 services/ports for service",
-          protocol
-        )
-        return
-      end
-
-      SetModified()
-
-      # all allowed ports
-      allowed_services = GetAllowedServicesForZoneProto(zone, protocol)
-
-      allowed_services = Convert.convert(
-        Builtins.union(allowed_services, add_ports),
-        from: "list",
-        to:   "list <string>"
-      )
-      allowed_services = PortRanges.FlattenServices(allowed_services, protocol)
-
-      SetAllowedServicesForZoneProto(allowed_services, zone, protocol)
-
-      nil
     end
 
     # Removes service defined by package (FATE #300687) from enabled services.
@@ -4009,65 +4195,6 @@ module Yast
 
       # well, actually it returns list of services not-assigned to any well-known service
       deep_copy(all_allowed_services)
-    end
-
-    # Function sets additional ports/services from taken list. Firstly, all additional services
-    # are removed also with their aliases. Secondly new ports/protocols are added.
-    # It uses GetAdditionalServices() function to get the current state and
-    # then it removes what has been removed and adds what has been added.
-    #
-    # @param [String] protocol
-    # @param [String] zone
-    # @param	list <string> list of ports/protocols
-    # @see #GetAdditionalServices()
-    #
-    # @example
-    #	SetAdditionalServices ("TCP", "EXT", ["53", "128"])
-    def SetAdditionalServices(protocol, zone, new_list_services)
-      new_list_services = deep_copy(new_list_services)
-      old_list_services = Builtins.toset(GetAdditionalServices(protocol, zone))
-      new_list_services = Builtins.toset(new_list_services)
-
-      if new_list_services != old_list_services
-        SetModified()
-
-        add_services = []
-        remove_services = []
-
-        # Add these services
-        Builtins.foreach(new_list_services) do |service|
-          if !Builtins.contains(old_list_services, service)
-            add_services = Builtins.add(add_services, service)
-          end
-        end
-        # Remove these services
-        Builtins.foreach(old_list_services) do |service|
-          if !Builtins.contains(new_list_services, service)
-            remove_services = Builtins.add(remove_services, service)
-          end
-        end
-
-        if Ops.greater_than(Builtins.size(remove_services), 0)
-          Builtins.y2milestone(
-            "Removing additional services %1/%2 from zone %3",
-            remove_services,
-            protocol,
-            zone
-          )
-          RemoveAllowedPortsOrServices(remove_services, protocol, zone, true)
-        end
-        if Ops.greater_than(Builtins.size(add_services), 0)
-          Builtins.y2milestone(
-            "Adding additional services %1/%2 into zone %3",
-            add_services,
-            protocol,
-            zone
-          )
-          AddAllowedPortsOrServices(add_services, protocol, zone)
-        end
-      end
-
-      nil
     end
 
     # Function returns if any other firewall then SuSEfirewall2 is currently running on the

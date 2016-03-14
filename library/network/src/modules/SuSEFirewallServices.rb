@@ -54,6 +54,12 @@ module Yast
       "description"     => ""
     }
 
+    # Use same hash for package names and services
+    @@firewall_backends = {
+      :sf2 => "SuSEfirewall2",
+      :fwd => "firewalld"
+    }
+
     def self.create(backend_sym = nil)
       # If backend is specificed, go ahead and create an instance. Otherwise, try
       # to detect which backend is enabled and create the appropriate instance.
@@ -154,6 +160,13 @@ module Yast
     # @return [Boolean] modified
     def GetModified
       @sfws_modified
+    end
+
+    def morph_to(backend_sym)
+      # Sometimes it's more convenient to send the backend string name.
+      backend_sym = @@firewall_backends.select { |k, v| v == backend_sym }.keys.first unless backend_sym.is_a?(Symbol)
+      Yast.send(:remove_const, 'SuSEFirewallServices')
+      Yast.const_set('SuSEFirewallServices', self.class.superclass.create(backend_sym))
     end
 
   end

@@ -1032,7 +1032,7 @@ module Yast
     @@zone_attributes=[:interfaces, :masquerade, :modified, :ports, :protocols, :services]
     # {enable,start}_firewall are "inherited" from SF2 so we can't use symbols
     # there without having to change all the SF2 callers.
-    @@key_settings=["enable_firewall", :logging, "start_firewall"]
+    @@key_settings=["enable_firewall", :logging, :routing, "start_firewall"]
 
     EMPTY_ZONE = {
         :interfaces => [],
@@ -2065,6 +2065,24 @@ module Yast
 
     end
 
+    # Function sets if firewall should support routing.
+    #
+    # @param	boolean set to support route or not
+    # FirewallD does not have something similar to FW_ROUTE
+    # so this API call is not applicable to FirewallD
+    def SetSupportRoute(set_route)
+      @SETTINGS[:routing] = set_route
+    end
+
+    # Function returns if firewall supports routing.
+    #
+    # @return	[Boolean] if route is supported
+    # FirewallD does not have something similar to FW_ROUTE
+    # so this API call is not applicable to FirewallD
+    def GetSupportRoute
+      @SETTINGS[:routing]
+    end
+
     publish variable: :firewall_service, type: "string", private: true
     publish variable: :FIREWALL_PACKAGE, type: "const string"
     publish variable: :SETTINGS, type: "map <string, any>", private: true
@@ -2137,6 +2155,8 @@ module Yast
     publish function: :RemoveAllowedPortsOrServices, type: "void (list <string>, string, string, boolean)", private: true
     publish function: :AddAllowedPortsOrServices, type: "void (list <string>, string, string)", private: true
     publish function: :IsOtherFirewallRunning, type: "boolean ()"
+    publish function: :SetSupportRoute, type: "void (boolean)"
+    publish function: :GetSupportRoute, type: "boolean ()"
 
   end
 

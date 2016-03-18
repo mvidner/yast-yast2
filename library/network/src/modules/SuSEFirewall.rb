@@ -2083,6 +2083,86 @@ module Yast
       @SETTINGS[:routing]
     end
 
+    def ArePortsOrServicesAllowed(needed_ports, protocol, zone, check_for_aliases)
+      needed_ports = deep_copy(needed_ports)
+      are_allowed = true
+
+      if Ops.less_than(Builtins.size(needed_ports), 1)
+        Builtins.y2warning(
+          "Undefined list of %1 services/ports for service",
+          protocol
+        )
+        return true
+      end
+
+      allowed_ports = {}
+      Ops.set(
+        allowed_ports,
+        "ports",
+        GetAllowedServicesForZoneProto(zone, protocol)
+      )
+
+      Builtins.foreach(needed_ports) do |needed_port|
+        if !Builtins.contains(Ops.get(allowed_ports, "ports", []), needed_port) &&
+           !PortRanges.PortIsInPortranges(
+             needed_port,
+             Ops.get(allowed_ports, "port_ranges", [])
+           )
+          are_allowed = false
+          raise Break
+        end
+      end
+
+      are_allowed
+    end
+
+    # Function returns if requested service is allowed in respective zone.
+    # Function takes care for service's aliases (only for TCP and UDP).
+    # Service is defined by set of parameters such as port and protocol.
+    #
+    # @param [String] service (service name, port name, port alias or port number)
+    # @param [String] protocol TCP, UDP, RCP or IP
+    # @param [String] interface name (like modem0), firewall zone (like "EXT") or "any" for all zones.
+    # @return	[Boolean] if service is allowed
+    #
+    # @example
+    #	HaveService ("ssh", "TCP", "EXT") -> true
+    #	HaveService ("ssh", "TCP", "modem0") -> false
+    #	HaveService ("53", "UDP", "dsl") -> false
+    def HaveService(service, protocol, interface)
+      if !IsSupportedProtocol(protocol)
+        Builtins.y2error("Unknown protocol: %1", protocol)
+        return nil
+      end
+
+      # definition of searched zones
+      zones = []
+
+      # "any" for all zones, this is ugly
+      if interface == "any"
+        zones = GetKnownFirewallZones()
+        # string interface is the zone name
+      elsif IsKnownZone(interface)
+        zones = Builtins.add(zones, interface)
+        # interface is the interface name
+      else
+        interface = GetZoneOfInterface(interface)
+        zones = Builtins.add(zones, interface) if !interface.nil?
+      end
+
+      # Check and return whether the service (port) is supported anywhere
+      ret = false
+      Builtins.foreach(zones) do |zone|
+        # This function can also handle port ranges
+        if ArePortsOrServicesAllowed([service], protocol, zone, true)
+          ret = true
+          raise Break
+        end
+      end
+
+      ret
+    end
+
     publish variable: :firewall_service, type: "string", private: true
     publish variable: :FIREWALL_PACKAGE, type: "const string"
     publish variable: :SETTINGS, type: "map <string, any>", private: true
@@ -2157,6 +2237,8 @@ module Yast
     publish function: :IsOtherFirewallRunning, type: "boolean ()"
     publish function: :SetSupportRoute, type: "void (boolean)"
     publish function: :GetSupportRoute, type: "boolean ()"
+    publish function: :ArePortsOrServicesAllowed, type: "boolean (list <string>, string, string, boolean)", private: true
+    publish function: :HaveService, type: "boolean (string, string, string)"
 
   end
 

@@ -1,0 +1,156 @@
+-*- org -*-
+
+https://github.com/yast/yast-yast2/pull/457/commits
+
+Understanding the Yast::SuSEFirewallClass
+http://www.rubydoc.info/github/yast/yast-yast2/Yast/SuSEFirewallClass
+
+
+* glossary
+** interface
+a network inteface card, eg. eth0 or wlan0
+** service
+(see also: unit)
+a definition of ports needed by another system service
+/etc/sysconfig/SuSEfirewall2.d/services/
+
+BTW /etc/sysconfig/SuSEfirewall2 calls them CONFIGURATIONS because "service"
+means a name for port number there, as in /etc/services. Are you confused yet?
+
+** unit
+(see also: service)
+the SystemV/systemd service, or unit, of the firewall itself
+actually there are 2 of them,
+/usr/lib/systemd/system/SuSEfirewall2.service
+/usr/lib/systemd/system/SuSEfirewall2_init.service
+which is reflected in the method names
+** zone
+SF2: categorizes interfaces
+FWD: categorizes connections (in the NM sense?? not in the TCP sense)
+
+* @SETTINGS
+
+enable_firewall [Boolean]
+start_firewall  [Boolean]
+
+* dependencies: packages
+** SuSEFirewallIsInstalled() -> Boolean
+caching wrapper of needed_packages_installed
+queries the appropriate backend package
+** SetInstallPackagesIfMissing(Boolean) -> void
+defaults to false
+** (var) needed_packages_installed -> Boolean
+** private (var) check_and_install_package -> Boolean
+* Unit # firewall systemd unit management
+** IsEnabled() -> Boolean
+** EnableServices() -> Boolean
+** DisableServices() -> Boolean
+** GetEnableService() -> Boolean
+queries @SETTINGS[enable_firewall]
+** SetEnableService(Boolean) -> void
+sets @SETTINGS[enable_firewall]
+(and SetModified)
+
+** IsStarted() -> Boolean
+** StartServices() -> Boolean
+** StopServices() -> Boolean
+** GetStartService() -> Boolean
+queries @SETTINGS[start_firewall]
+** SetStartService(Boolean) -> void
+sets @SETTINGS[start_firewall]
+(and SetModified)
+* modified flag
+** GetModified() -> Boolean
+** SetModified() -> void
+** ResetModified() -> void
+* current-permanent
+(cim-like configuration categories: current, permanent, future, autoyast)
+** Read() -> Boolean
+permanent(current?) -> future
+** Write() -> Boolean
+future -> permanent+current
+** SaveAndRestartService() -> Boolean
+future -> permanent+current
+even if not Modified, always starts FW
+** WriteOnly() -> Boolean
+future -> permanent
+** WriteConfiguration() -> Boolean
+future -> permanent
+** ActivateConfiguration() -> Boolean
+permanent -> current
+** Export() -> Hash(String->Object)
+future -> ay
+** Import(Hash(String->Object)
+ay -> future
+
+* zones
+an interface can be in zero or one zone
+** GetKnownFirewallZones() -> Array(String)
+** GetZoneFullName(String) -> String # internal -> human readable, translatable
+** IsKnownZone(String) -> Boolean
+
+* services in zones
+** IsServiceSupportedInZone(String s, String z) -> Boolean or nil
+true or false: service is in zone (that is, allowed, not blocked, in sf2)
+nil: unknown zone
+
+"supported" is seemingly superfluous but hints at the complex implementation
+and history:
+this does not simply check if *s* is in the appropriate list of *z*, but
+expands *s* and matches the contained ports and protocols.
+It is complicated because yast implemented services even before sf2 did.
+** GetServices(Array(String) ss) -> Hash(String s, Hash(String z, Boolean))
+
+** GetServicesInZones(Array(String) ss) -> Hash(String s, Hash(String i, Boolean))
+similar to GetServices but the inner hashes are keyed by INTERFACES despite
+the name
+
+** SetServices(Array(String) ss, Array(String) is, Boolean) -> Boolean success
+actually returns nil
+** SetServicesForZones(Array(String) ss, Array(String) zs, Boolean) -> Boolean success
+zs empty => all!
+(but that is a poor match for the "block" or "trusted" FWD zones?!)
+actually returns nil
+
+** GetAdditionalServices(String protocol, String zone) -> Array(String)
+SF2: for a protocol and zone, the services(ports) that are not part of "configurations"
+** private GetAllowedServicesForZoneProto(String zone, String protocol) -> Array(String)
+SF2: this is simply the raw value of FW_SERVICES_EXT_TCP (or the like)
+so they are services in the /etc/services sense, or ports, or ranges
+* interfaces
+** GetListOfKnownInterfaces() -> Array(String)
+** GetAllKnownInterfaces() -> Array(Hash(String->String))
+keys: id, name(human), type, zone
+type is "dialup" or missing
+
+* interfaces in zones
+** IsInterfaceInZone(String i, String z) -> Boolean
+** GetZoneOfInterface(String) -> String or nil
+** GetZonesOfInterfaces(Array(String) is) -> Array(String)
+this could have been a simple union of GetZoneOfInterface
+** GetZonesOfInterfacesWithAnyFeatureSupported(Array(String) is) -> Array(String)
+expand  "any" interface in the "EXT" zone
+** GetInterfacesInZone(String) -> Array(String)
+** GetInterfacesInZoneSupportingAnyFeature(String) -> Array(String)
+expand "any"
+** AddInterfaceIntoZone(String, String) -> void
+** RemoveInterfaceFromZone(String, String) -> void
+
+** GetSpecialInterfacesInZone(String) -> Array(String)
+special such as "any" and unknown interfaces
+** AddSpecialInterfaceIntoZone(String, String) -> void
+** RemoveSpecialInterfaceFromZone(String, String) -> void
+* masquerading
+(a global flag in susefirewall, a per-zone setting in fwd)
+** GetMasquerade() -> Boolean
+** SetMasquerade(Boolean)
+* logging
+** GetLoggingSettings(String rule) -> String level
+SF2: rule is ACCEPT or DROP, level is ALL, CRIT, or NONE
+** SetLoggingSettings(String rule, String level) -> void
+SF2: rule is ACCEPT or DROP, level is ALL, CRIT, or NONE
+** GetIgnoreLoggingBroadcast(String z) -> String yesno
+** SetIgnoreLoggingBroadcast(String z, String yesno) -> void
+* protocols
+** IsSupportedProtocol(String) -> Boolean
+whether one of TCP, UDP, IP

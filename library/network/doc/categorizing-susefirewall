@@ -59,6 +59,9 @@ queries @SETTINGS[start_firewall]
 ** SetStartService(Boolean) -> void
 sets @SETTINGS[start_firewall]
 (and SetModified)
+
+**  IsOtherFirewallRunning() -> Boolean
+
 * modified flag
 ** GetModified() -> Boolean
 ** SetModified() -> void
@@ -118,14 +121,21 @@ SF2: for a protocol and zone, the services(ports) that
 ** private GetAllowedServicesForZoneProto(String zone, String protocol) -> Array(String)
 SF2: this is simply the raw value of FW_SERVICES_EXT_TCP (or the like)
 so they are services in the /etc/services sense, or ports, or ranges
+** private SetAllowedServicesForZoneProto(String allowed_services, String zone, String protocol)
+SF2: this is simply the raw value of FW_SERVICES_EXT_TCP (or the like)
+so they are services in the /etc/services sense, or ports, or ranges
 
 ** SetAdditionalServices(String protocol, String zone, Array(String)) -> void
 SF2: for a protocol and zone, the services(ports) that
  are not part of "configurations" are replaced by the specified list
 
-** private RemoveAllowedPortsOrServices(Array(String) ports, String protocol, String zone, Boolean check_for_aliases)
+** private RemoveAllowedPortsOrServices(Array(String) ports_or_ranges, String protocol, String zone, Boolean check_for_aliases)
 
+** ArePortsOrServicesAllowed(String needed_ports, String protocol, String zone, Boolean check_for_aliases) -> Boolean
 
+** HaveService(String service, String protocol, String zone_or_interface) -> Boolean
+** AddService(String service, String protocol, String zone_or_interface) -> Boolean success
+** RemoveService(String service, String protocol, String zone_or_interface) -> Boolean success
 * interfaces
 ** GetListOfKnownInterfaces() -> Array(String)
 ** GetAllKnownInterfaces() -> Array(Hash(String->String))
@@ -152,7 +162,11 @@ special such as "any" and unknown interfaces
 * masquerading
 (a global flag in susefirewall, a per-zone setting in fwd)
 ** GetMasquerade() -> Boolean
-** SetMasquerade(Boolean)
+** SetMasquerade(Boolean) -> void
+* routing
+(a global flag in SF2, dummy UI-only for FWD)
+** GetSupportRoute() -> Boolean
+** SetSupportRoute(Boolean) -> void
 * logging
 ** GetLoggingSettings(String rule) -> String level
 SF2: rule is ACCEPT or DROP, level is ALL, CRIT, or NONE

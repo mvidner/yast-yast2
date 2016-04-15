@@ -113,10 +113,19 @@ zs empty => all!
 actually returns nil
 
 ** GetAdditionalServices(String protocol, String zone) -> Array(String)
-SF2: for a protocol and zone, the services(ports) that are not part of "configurations"
+SF2: for a protocol and zone, the services(ports) that
+ are not part of "configurations"
 ** private GetAllowedServicesForZoneProto(String zone, String protocol) -> Array(String)
 SF2: this is simply the raw value of FW_SERVICES_EXT_TCP (or the like)
 so they are services in the /etc/services sense, or ports, or ranges
+
+** SetAdditionalServices(String protocol, String zone, Array(String)) -> void
+SF2: for a protocol and zone, the services(ports) that
+ are not part of "configurations" are replaced by the specified list
+
+** private RemoveAllowedPortsOrServices(Array(String) ports, String protocol, String zone, Boolean check_for_aliases)
+
+
 * interfaces
 ** GetListOfKnownInterfaces() -> Array(String)
 ** GetAllKnownInterfaces() -> Array(Hash(String->String))
@@ -154,3 +163,4 @@ SF2: rule is ACCEPT or DROP, level is ALL, CRIT, or NONE
 * protocols
 ** IsSupportedProtocol(String) -> Boolean
 whether one of TCP, UDP, IP
+

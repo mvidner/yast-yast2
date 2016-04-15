@@ -21,21 +21,16 @@
 # you may find current contact information at www.novell.com
 #
 # ***************************************************************************
-# File:	modules/PortAliases.ycp
-# Package:	Ports Aliases.
-# Summary:	Definition of Port Aliases.
-# Authors:	Lukas Ocilka <locilka@suse.cz>
-#
-# $Id$
-#
-# Global Definition of Port Aliases for services taken from /etc/services.
-# /etc/services are defined by IANA http://www.iana.org/assignments/port-numbers.
-# This module provides full listing of port aliases (supporting also multiple
-# aliases like "http", "www" and "www-http" for port 80).
-# Results are cached, so repeated requests are answered faster.
+
 require "yast"
 
 module Yast
+  # Port Aliases for services taken from /etc/services.
+  #
+  # /etc/services are defined by IANA http://www.iana.org/assignments/port-numbers.
+  # This module provides full listing of port aliases (supporting also multiple
+  # aliases like "http", "www" and "www-http" for port 80).
+  # Results are cached, so repeated requests are answered faster.
   class PortAliasesClass < Module
     def main
       textdomain "base"
@@ -109,9 +104,12 @@ module Yast
       @cache_not_allowed_ports = []
     end
 
-    # Function returns if the port name is allowed port name (or number).
-    #
-    # @return	[Boolean] if allowed
+    # Is *port_name* a number between "1" and "65535"
+    # or a syntactically valid name?
+    # Nil is not valid.
+    # Names can contain A-Za-z0-9 and . * / + - _
+    # @param port_name [String,nil]
+    # @return [Boolean]
     def IsAllowedPortName(port_name)
       if port_name.nil?
         Builtins.y2error("Invalid port name: %1", port_name)
@@ -128,7 +126,7 @@ module Yast
       end
     end
 
-    # Function returns string describing allowed port name or number.
+    # A translated description of an allowed port name or number (multiline).
     #
     # @return	[String] with description
     def AllowedPortNameOrNumber
@@ -225,10 +223,11 @@ module Yast
     end
 
     # Function returns list of aliases (port-names and port-numbers) for
-    # requested port-number or port-name. Also the requested name or port is returned.
+    # requested port-number or port-name.
+    # The original argument is included in the result.
     #
-    # @param [String] port-number or port-name
-    # @return	[Array] [string] of aliases
+    # @param port [String] port-number or port-name
+    # @return [Array<String>] aliases
     def GetListOfServiceAliases(port)
       service_aliases = [port]
       port_number = nil
@@ -296,7 +295,7 @@ module Yast
     # Function returns if the requested port-name is known port.
     # Known port have an IANA alias.
     #
-    # @param	string port-name
+    # @param	[String] port_name
     # @return	[Boolean] if is known
     def IsKnownPortName(port_name)
       # function returns the requested port and aliases if exists
@@ -308,8 +307,8 @@ module Yast
 
     # Function returns a port number for the port name alias
     #
-    # @param port_name_or_number
-    # @param port_number or nil when not found
+    # @param port_name [String] a name or a  number
+    # @return [Fixnum,nil] port number or nil when not found
     def GetPortNumber(port_name)
       if !Builtins.regexpmatch(port_name, "^[0123456789]+$")
         port_number = Ops.get(@SERVICE_NAME_TO_PORT, port_name) do

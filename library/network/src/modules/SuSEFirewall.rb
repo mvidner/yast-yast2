@@ -106,6 +106,10 @@ module Yast
       running_backends
     end
 
+    # ------------------------------------------------------------------------
+    # @!group Unit
+    # ------------------------------------------------------------------------
+
     # Function which returns if SuSEfirewall2 should start in Write process.
     # In fact it means that SuSEfirewall2 will at the end.
     #
@@ -279,6 +283,10 @@ module Yast
         return false
       end
     end
+
+    # ------------------------------------------------------------------------
+    # @!endgroup
+    # ------------------------------------------------------------------------
 
     # Function returns list of known firewall zones (shortnames)
     #
@@ -454,6 +462,7 @@ module Yast
     # the packages.
     #
     # @param [Boolean] new_status, 'true' if packages should be offered for installation
+    # @!group Packages
     def SetInstallPackagesIfMissing(new_status)
       if new_status.nil?
         Builtins.y2error("Wrong value: %1", new_status)
@@ -472,6 +481,7 @@ module Yast
 
       nil
     end
+    # @!endgroup
 
     # Function returns list of maps of known interfaces.
     #
@@ -614,6 +624,7 @@ module Yast
     # installation)
     #
     # @return [Boolean] whether the selected firewall backend is installed
+    # @!group Packages
     def SuSEFirewallIsInstalled
       # Always recheck the status in inst-sys, user/solver might have change
       # the list of packages selected for installation
@@ -633,6 +644,7 @@ module Yast
 
       @needed_packages_installed
     end
+    # @!endgroup
 
     # Function for saving configuration and restarting firewall.
     # Is is the same as Write() but write is allways forced.

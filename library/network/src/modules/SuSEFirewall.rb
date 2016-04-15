@@ -762,10 +762,10 @@ module Yast
     # Local function removes ports and their aliases (if check_for_aliases is true), for
     # requested protocol and zone.
     #
-    # @param	list <string> ports to be removed
+    # @param [Array<String>] remove_ports ports (or ranges) to be removed
     # @param [String] protocol
     # @param [String] zone
-    # @param	boolean check for port-aliases
+    # @param [Boolean] check_for_aliases resolve port names
     def RemoveAllowedPortsOrServices(remove_ports, protocol, zone, check_for_aliases)
       remove_ports = deep_copy(remove_ports)
       if Ops.less_than(Builtins.size(remove_ports), 1)
@@ -3786,6 +3786,11 @@ module Yast
       ret
     end
 
+    # @param needed_ports [Array<String>] ranges are allowed
+    # @param protocol     [String]
+    # @param zone         [String]
+    # @param check_for_aliases [Boolean]
+    # @return [Boolean]
     def ArePortsOrServicesAllowed(needed_ports, protocol, zone, check_for_aliases)
       needed_ports = deep_copy(needed_ports)
       are_allowed = true
